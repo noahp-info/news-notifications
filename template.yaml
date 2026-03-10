@@ -1,0 +1,144 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: News Notifications — Serverless web scraper and SMS alerting
+
+Parameters:
+  PhoneNumber:
+    Type: String
+    Description: "E.164 phone number for SMS (e.g. +12125551234)"
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures:
+      - arm64
+    MemorySize: 512
+    Timeout: 30
+    Layers:
+      - !Ref ScraperDepsLayer
+    Environment:
+      Variables:
+        SNS_TOPIC_ARN: !Ref PersonalAlertsTopic
+
+# ── Shared policies ──────────────────────────────────────────────────────────
+# Reusable inline policy fragment for SNS publish + SSM state read/write.
+# Each site Lambda references the SNS topic ARN via the global env var above
+# and gets its own SSM path via per-function env vars.
+
+Resources:
+
+  # ── Shared infrastructure ─────────────────────────────────────────────────
+
+  PersonalAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: PersonalAlerts
+
+  SmsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref PersonalAlertsTopic
+      Protocol: sms
+      Endpoint: !Ref PhoneNumber
+
+  ScraperDepsLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: ScraperDeps
+      ContentUri: layer/
+      CompatibleRuntimes:
+        - python3.12
+      CompatibleArchitectures:
+        - arm64
+    Metadata:
+      BuildMethod: python3.12
+
+  # ── Site: Trump Truth Social ──────────────────────────────────────────────
+  # DOM confirmed 2026-03-10:
+  #   Post container : div.status  (data-status-url attribute holds post URL)
+  #   Post body text : div.status__content p
+  #   Timestamp      : a.status-info__meta-item (second occurrence)
+  # Server-rendered HTML — no Playwright required.
+
+  TrumpstruthScraperFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: TrumpstruthScraper
+      CodeUri: src/scraper/
+      Handler: handler.lambda_handler
+      Description: Scrapes trumpstruth.org for new Truth Social posts
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+                - ssm:PutParameter
+              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/news-notifier/state/trumpstruth"
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref PersonalAlertsTopic
+      Environment:
+        Variables:
+          SITE_URL: "https://trumpstruth.org/"
+          SITE_NAME: "Trump Truth Social"
+          SCRAPE_TYPE: "css"
+          CSS_SELECTOR: "div.status__content p"
+          SCRAPE_INTERVAL_MINUTES: "5"
+          MAX_ITEMS: "5"
+          SSM_STATE_KEY: "/news-notifier/state/trumpstruth"
+          NOTIFICATION_PREFIX: "New Truth Social post"
+      Events:
+        Schedule:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: "rate(5 minutes)"
+            ScheduleExpressionTimezone: "America/New_York"
+
+  # ── To add a new site ─────────────────────────────────────────────────────
+  # Copy the block above. Change:
+  #   FunctionName, Description, CSS_SELECTOR, SITE_URL, SITE_NAME,
+  #   SSM_STATE_KEY (must be unique), NOTIFICATION_PREFIX
+  # Update the SSM Resource ARN to match the new SSM_STATE_KEY.
+  # Run: sam build && sam deploy
+  #
+  # ExampleSiteFn:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     FunctionName: ExampleSiteScraper
+  #     CodeUri: src/scraper/
+  #     Handler: handler.lambda_handler
+  #     Policies:
+  #       - Statement:
+  #           - Effect: Allow
+  #             Action: [ssm:GetParameter, ssm:PutParameter]
+  #             Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/news-notifier/state/example-site"
+  #       - Statement:
+  #           - Effect: Allow
+  #             Action: sns:Publish
+  #             Resource: !Ref PersonalAlertsTopic
+  #     Environment:
+  #       Variables:
+  #         SITE_URL: "https://example.com/feed"
+  #         SITE_NAME: "Example Site"
+  #         SCRAPE_TYPE: "rss"
+  #         CSS_SELECTOR: "title"
+  #         SCRAPE_INTERVAL_MINUTES: "5"
+  #         MAX_ITEMS: "3"
+  #         SSM_STATE_KEY: "/news-notifier/state/example-site"
+  #         NOTIFICATION_PREFIX: "New post from Example"
+  #     Events:
+  #       Schedule:
+  #         Type: ScheduleV2
+  #         Properties:
+  #           ScheduleExpression: "rate(5 minutes)"
+
+Outputs:
+  PersonalAlertsTopicArn:
+    Description: SNS Topic ARN
+    Value: !Ref PersonalAlertsTopic
+
+  TrumpstruthFunctionArn:
+    Description: Trumpstruth scraper Lambda ARN
+    Value: !GetAtt TrumpstruthScraperFn.Arn
