@@ -41,4 +41,4 @@ jobs:
           sam deploy \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
-            --parameter-overrides PhoneNumber=${{ secrets.PHONE_NUMBER }}
+            --parameter-overrides Email=${{ secrets.EMAIL }}

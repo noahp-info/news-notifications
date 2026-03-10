@@ -1,11 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: News Notifications — Serverless web scraper and SMS alerting
+Description: News Notifications — Serverless web scraper and email alerting
 
 Parameters:
-  PhoneNumber:
+  Email:
     Type: String
-    Description: "E.164 phone number for SMS (e.g. +12125551234)"
+    Description: "Email address for notifications (e.g. you@example.com)"
 
 Globals:
   Function:
@@ -34,12 +34,12 @@ Resources:
     Properties:
       TopicName: PersonalAlerts
 
-  SmsSubscription:
+  EmailSubscription:
     Type: AWS::SNS::Subscription
     Properties:
       TopicArn: !Ref PersonalAlertsTopic
-      Protocol: sms
-      Endpoint: !Ref PhoneNumber
+      Protocol: email
+      Endpoint: !Ref Email
 
   ScraperDepsLayer:
     Type: AWS::Serverless::LayerVersion
