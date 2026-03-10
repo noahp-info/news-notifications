@@ -14,7 +14,7 @@ def fetch(url: str, timeout: int = 20) -> str:
         "User-Agent": random.choice(_USER_AGENTS),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Encoding": "gzip, deflate",
         "Cache-Control": "no-cache",
     }
     response = requests.get(url, headers=headers, timeout=timeout)
