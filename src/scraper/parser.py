@@ -17,7 +17,7 @@ def parse(html: str, scrape_type: str, selector: str, max_items: int) -> list[st
 
 
 def _parse_css(html: str, selector: str, max_items: int) -> list[str]:
-    soup = BeautifulSoup(html, "lxml")
+    soup = BeautifulSoup(html, "html.parser")
     elements = soup.select(selector)[:max_items]
     return [
         el.get_text(separator=" ", strip=True)
