@@ -27,7 +27,7 @@ def lambda_handler(event, context):
     items = parse(html, SCRAPE_TYPE, CSS_SELECTOR, MAX_ITEMS)
 
     if not items:
-        logger.warning("No items parsed — check selector or page structure")
+        logger.warning(f"No items parsed — first 500 chars of response: {html[:500]!r}")
         return {"status": "no_items"}
 
     content_hash = hashlib.sha256("\n".join(items).encode()).hexdigest()
