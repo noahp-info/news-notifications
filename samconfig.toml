@@ -10,3 +10,6 @@ capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
 resolve_s3 = true
 region = "us-east-1"
+
+# CI overrides (applied by the --no-confirm-changeset flag in deploy.yml)
+# confirm_changeset = false is set via CLI flag in GitHub Actions
